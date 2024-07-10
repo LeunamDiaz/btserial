@@ -16,6 +16,7 @@ class _HomeState extends State<Home> {
   BluetoothConnection? connection;
   List<BluetoothDevice> devices = [];
   BluetoothDevice? device;
+  String contenido = '';
 
   @override
   void initState() {
@@ -39,19 +40,19 @@ class _HomeState extends State<Home> {
     });
 
     _bluetooth.onStateChanged().listen((event) {
-      switch (event) {
-        case BluetoothState.STATE_ON:
-          BTstate = true;
-          break;
-        case BluetoothState.STATE_OFF:
-          BTstate = false;
-          break;
-        case BluetoothState.STATE_TURNING_ON:
-          break;
-        case BluetoothState.STATE_TURNING_OFF:
-          break;
-      }
-      setState(() {});
+      setState(() {
+        switch (event) {
+          case BluetoothState.STATE_ON:
+            BTstate = true;
+            break;
+          case BluetoothState.STATE_OFF:
+            BTstate = false;
+            break;
+          case BluetoothState.STATE_TURNING_ON:
+          case BluetoothState.STATE_TURNING_OFF:
+            break;
+        }
+      });
     });
   }
 
@@ -65,7 +66,7 @@ class _HomeState extends State<Home> {
 
   Widget switchBT() {
     return SwitchListTile(
-      title: Text(BTstate ? 'Bluetooth Encendido' : 'Bluetooth apagado'),
+      title: Text(BTstate ? 'Bluetooth Encendido' : 'Bluetooth Apagado'),
       activeColor: BTstate ? Colors.blue : Colors.grey,
       tileColor: BTstate ? Colors.blue : Colors.grey,
       value: BTstate,
@@ -82,6 +83,87 @@ class _HomeState extends State<Home> {
     );
   }
 
+  Widget infoDisp() {
+    return ListTile(
+      title: device == null ? Text("Sin Dispositivo") : Text(device?.name ?? "Desconocido"),
+      subtitle: device == null ? Text("Sin Dispositivo") : Text(device?.address ?? "Desconocido"),
+      trailing: BTconnected
+          ? IconButton(
+        icon: const Icon(Icons.delete),
+        onPressed: () async {
+          await connection?.finish();
+          setState(() {
+            BTconnected = false;
+            devices = [];
+            device = null;
+          });
+        },
+      )
+          : IconButton(
+        icon: const Icon(Icons.search),
+        onPressed: listarDispositivos,
+      ),
+    );
+  }
+
+  Future<void> listarDispositivos() async {
+    devices = await _bluetooth.getBondedDevices();
+    debugPrint(devices.toString());
+    setState(() {});
+  }
+
+  Widget lista() {
+    if (BTconnected) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.vertical,
+        child: Text(
+          contenido,
+          style: const TextStyle(
+            color: Colors.green,
+            fontWeight: FontWeight.bold,
+            fontSize: 10.0,
+            letterSpacing: 1,
+            wordSpacing: 1,
+          ),
+        ),
+      );
+    } else {
+      return devices.isEmpty
+          ? const Text("No hay dispositivos")
+          : ListView.builder(
+        itemCount: devices.length,
+        itemBuilder: (context, index) {
+          return ListTile(
+            title: Text(devices[index].name ?? "Desconocido"),
+            subtitle: Text(devices[index].address),
+            trailing: IconButton(
+              icon: const Icon(Icons.bluetooth_connected),
+              onPressed: () async {
+                connection = await BluetoothConnection.toAddress(devices[index].address);
+                recibirDatos();
+                setState(() {
+                  device = devices[index];
+                  BTconnected = true;
+                  recibirDatos();
+                  setState(() {
+
+                  });
+                });
+              },
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  void recibirDatos() {
+    connection?.input?.listen((event) {
+      contenido = String.fromCharCodes(event);
+      setState(() {});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -89,7 +171,12 @@ class _HomeState extends State<Home> {
         title: const Text("Flutter Bluetooth"),
       ),
       body: Column(
-        children: <Widget>[switchBT()],
+        children: <Widget>[
+          switchBT(),
+          const Divider(height: 5),
+          infoDisp(),
+          Expanded(child: lista()),
+        ],
       ),
     );
   }
